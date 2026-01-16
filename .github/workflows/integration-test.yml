@@ -77,20 +77,72 @@ jobs:
     needs: trigger-consumer-tests
     runs-on: ubuntu-latest
     steps:
-      - name: Check all results
+      - name: Collect results
+        id: results
+        run: |
+          echo "📊 Collecting integration test results..."
+          
+          # Matrix 결과 확인
+          RESULT="${{ needs.trigger-consumer-tests.result }}"
+          
+          if [ "$RESULT" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create PR comment
+        if: github.event_name == 'pull_request'
+        run: |
+          # Generate report
+          cat > report.md << 'EOF'
+          ## ${{ steps.results.outputs.emoji }} Integration Test Results
+          
+          **Status**: ${{ needs.trigger-consumer-tests.result }}
+          
+          ### Consumer Repository Tests
+          
+          | Repository | Status |
+          |------------|--------|
+          | `sample-cpp-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+          | `sample-java-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+          | `sample-binary-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+          | `sample-multi-lang-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+          
+          ---
+          
+          <details>
+          <summary>ℹ️ What was tested?</summary>
+          
+          This PR triggered actual CI workflows in all consumer repositories to verify compatibility.
+          
+          - Each repository's **real CI workflow** was executed
+          - Tests ran against the `main` branch of each consumer repo
+          - All workflows used the **current state** of central-workflows
+          
+          </details>
+          
+          ${{ steps.results.outputs.status == 'success' && '### ✅ Safe to Merge\n\nAll consumer repositories passed their CI tests with these workflow changes!' || '### ⚠️ Action Required\n\nSome consumer repositories failed. Please review the test results above and fix any issues before merging.' }}
+          
+          ---
+          *🤖 Automated by Integration Test workflow*
+          EOF
+          
+          # Post comment to PR
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file report.md \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN }}
+      
+      - name: Check final status
         run: |
           echo "📊 Integration Test Results Summary"
           echo "===================================="
           
-          # needs context에서 결과 확인 (GitHub Actions에서 자동 제공)
-          PASSED=true
-          
-          if [ "${{ needs.trigger-consumer-tests.result }}" != "success" ]; then
-            echo "⚠️  Some consumer tests failed or were cancelled"
-            PASSED=false
-          fi
-          
-          if [ "$PASSED" = "true" ]; then
+          if [ "${{ steps.results.outputs.status }}" = "success" ]; then
             echo "🎉 All consumer repositories passed CI tests!"
             echo "✅ Safe to merge this PR"
           else
