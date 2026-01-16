@@ -93,44 +93,22 @@ jobs:
             echo "emoji=❌" >> $GITHUB_OUTPUT
           fi
       
-      - name: Create PR comment
+      - name: Post result to PR
         if: github.event_name == 'pull_request'
         run: |
-          # Checkout to access template file
-          git clone --depth 1 --branch ${{ github.head_ref }} \
-            https://github.com/${{ github.repository }}.git temp_repo
-          
-          # Read template
-          TEMPLATE=$(cat temp_repo/.github/templates/integration-test-report.md)
-          
-          # Determine per-repo status (all pass/fail together for now)
-          if [ "${{ needs.trigger-consumer-tests.result }}" = "success" ]; then
-            REPO_STATUS="✅ Passed"
-            CONCLUSION="### ✅ Safe to Merge\n\nAll consumer repositories passed their CI tests with these workflow changes!"
+          if [ "${{ steps.results.outputs.status }}" = "success" ]; then
+            MESSAGE="✅ **Integration Test Passed**
+
+All consumer repositories (sample-cpp-repo, sample-java-repo, sample-binary-repo, sample-multi-lang-repo) passed their CI tests."
           else
-            REPO_STATUS="❌ Failed"
-            CONCLUSION="### ⚠️ Action Required\n\nSome consumer repositories failed. Please review the test results above and fix any issues before merging."
+            MESSAGE="❌ **Integration Test Failed**
+
+Some consumer repositories failed. Check the workflow logs for details."
           fi
           
-          # Replace placeholders
-          REPORT="${TEMPLATE//\{\{EMOJI\}\}/${{ steps.results.outputs.emoji }}}"
-          REPORT="${REPORT//\{\{STATUS\}\}/${{ needs.trigger-consumer-tests.result }}}"
-          REPORT="${REPORT//\{\{CPP_STATUS\}\}/${REPO_STATUS}}"
-          REPORT="${REPORT//\{\{JAVA_STATUS\}\}/${REPO_STATUS}}"
-          REPORT="${REPORT//\{\{BINARY_STATUS\}\}/${REPO_STATUS}}"
-          REPORT="${REPORT//\{\{MULTI_STATUS\}\}/${REPO_STATUS}}"
-          REPORT="${REPORT//\{\{CONCLUSION\}\}/${CONCLUSION}}"
-          
-          # Save to file
-          echo "$REPORT" > report.md
-          
-          # Post comment to PR
           gh pr comment ${{ github.event.pull_request.number }} \
-            --body-file report.md \
+            --body "$MESSAGE" \
             --repo ${{ github.repository }}
-          
-          # Cleanup
-          rm -rf temp_repo
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
