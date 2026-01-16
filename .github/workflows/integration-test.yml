@@ -1,0 +1,81 @@
+name: Integration Test
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  trigger-consumer-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo:
+          - sample-cpp-repo
+          - sample-java-repo
+          - sample-binary-repo
+          - sample-multi-lang-repo
+    steps:
+      - name: Trigger CI in ${{ matrix.repo }}
+        run: |
+          echo "Triggering CI workflow in ${{ matrix.repo }}..."
+          gh workflow run ci.yml \
+            --repo youngseokyoon/${{ matrix.repo }} \
+            --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Wait for workflow to start
+        run: sleep 10
+      
+      - name: Get latest workflow run
+        id: get-run
+        run: |
+          RUN_ID=$(gh run list \
+            --repo youngseokyoon/${{ matrix.repo }} \
+            --workflow=ci.yml \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "Latest run ID: $RUN_ID"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Wait for workflow completion
+        run: |
+          echo "Waiting for workflow run ${{ steps.get-run.outputs.run_id }} to complete..."
+          gh run watch ${{ steps.get-run.outputs.run_id }} \
+            --repo youngseokyoon/${{ matrix.repo }} \
+            --exit-status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check workflow result
+        run: |
+          STATUS=$(gh run view ${{ steps.get-run.outputs.run_id }} \
+            --repo youngseokyoon/${{ matrix.repo }} \
+            --json conclusion \
+            --jq '.conclusion')
+          
+          echo "Workflow status: $STATUS"
+          
+          if [ "$STATUS" != "success" ]; then
+            echo "❌ CI failed in ${{ matrix.repo }}"
+            exit 1
+          fi
+          
+          echo "✅ CI passed in ${{ matrix.repo }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  integration-summary:
+    needs: trigger-consumer-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: All tests passed
+        run: |
+          echo "🎉 All consumer repositories passed CI tests!"
+          echo "✅ Safe to merge this PR"
