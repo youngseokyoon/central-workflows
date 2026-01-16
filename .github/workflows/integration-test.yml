@@ -11,6 +11,7 @@ jobs:
   trigger-consumer-tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false  # 하나 실패해도 나머지 계속 실행
       matrix:
         repo:
           - sample-cpp-repo
@@ -72,10 +73,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
   integration-summary:
+    if: always()  # 실패해도 항상 실행
     needs: trigger-consumer-tests
     runs-on: ubuntu-latest
     steps:
-      - name: All tests passed
+      - name: Check all results
         run: |
-          echo "🎉 All consumer repositories passed CI tests!"
-          echo "✅ Safe to merge this PR"
+          echo "📊 Integration Test Results Summary"
+          echo "===================================="
+          
+          # needs context에서 결과 확인 (GitHub Actions에서 자동 제공)
+          PASSED=true
+          
+          if [ "${{ needs.trigger-consumer-tests.result }}" != "success" ]; then
+            echo "⚠️  Some consumer tests failed or were cancelled"
+            PASSED=false
+          fi
+          
+          if [ "$PASSED" = "true" ]; then
+            echo "🎉 All consumer repositories passed CI tests!"
+            echo "✅ Safe to merge this PR"
+          else
+            echo "❌ Some tests failed - review the matrix results above"
+            echo "⚠️  Please fix issues before merging"
+            exit 1
+          fi
