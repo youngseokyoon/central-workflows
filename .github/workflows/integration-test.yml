@@ -96,44 +96,41 @@ jobs:
       - name: Create PR comment
         if: github.event_name == 'pull_request'
         run: |
-          # Generate report
-          cat > report.md << 'EOF'
-          ## ${{ steps.results.outputs.emoji }} Integration Test Results
+          # Checkout to access template file
+          git clone --depth 1 --branch ${{ github.head_ref }} \
+            https://github.com/${{ github.repository }}.git temp_repo
           
-          **Status**: ${{ needs.trigger-consumer-tests.result }}
+          # Read template
+          TEMPLATE=$(cat temp_repo/.github/templates/integration-test-report.md)
           
-          ### Consumer Repository Tests
+          # Determine per-repo status (all pass/fail together for now)
+          if [ "${{ needs.trigger-consumer-tests.result }}" = "success" ]; then
+            REPO_STATUS="✅ Passed"
+            CONCLUSION="### ✅ Safe to Merge\n\nAll consumer repositories passed their CI tests with these workflow changes!"
+          else
+            REPO_STATUS="❌ Failed"
+            CONCLUSION="### ⚠️ Action Required\n\nSome consumer repositories failed. Please review the test results above and fix any issues before merging."
+          fi
           
-          | Repository | Status |
-          |------------|--------|
-          | `sample-cpp-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-          | `sample-java-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-          | `sample-binary-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
-          | `sample-multi-lang-repo` | ${{ needs.trigger-consumer-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |
+          # Replace placeholders
+          REPORT="${TEMPLATE//\{\{EMOJI\}\}/${{ steps.results.outputs.emoji }}}"
+          REPORT="${REPORT//\{\{STATUS\}\}/${{ needs.trigger-consumer-tests.result }}}"
+          REPORT="${REPORT//\{\{CPP_STATUS\}\}/${REPO_STATUS}}"
+          REPORT="${REPORT//\{\{JAVA_STATUS\}\}/${REPO_STATUS}}"
+          REPORT="${REPORT//\{\{BINARY_STATUS\}\}/${REPO_STATUS}}"
+          REPORT="${REPORT//\{\{MULTI_STATUS\}\}/${REPO_STATUS}}"
+          REPORT="${REPORT//\{\{CONCLUSION\}\}/${CONCLUSION}}"
           
-          ---
-          
-          <details>
-          <summary>ℹ️ What was tested?</summary>
-          
-          This PR triggered actual CI workflows in all consumer repositories to verify compatibility.
-          
-          - Each repository's **real CI workflow** was executed
-          - Tests ran against the `main` branch of each consumer repo
-          - All workflows used the **current state** of central-workflows
-          
-          </details>
-          
-          ${{ steps.results.outputs.status == 'success' && '### ✅ Safe to Merge\n\nAll consumer repositories passed their CI tests with these workflow changes!' || '### ⚠️ Action Required\n\nSome consumer repositories failed. Please review the test results above and fix any issues before merging.' }}
-          
-          ---
-          *🤖 Automated by Integration Test workflow*
-          EOF
+          # Save to file
+          echo "$REPORT" > report.md
           
           # Post comment to PR
           gh pr comment ${{ github.event.pull_request.number }} \
             --body-file report.md \
             --repo ${{ github.repository }}
+          
+          # Cleanup
+          rm -rf temp_repo
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
