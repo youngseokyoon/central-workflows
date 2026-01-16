@@ -97,18 +97,18 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           if [ "${{ steps.results.outputs.status }}" = "success" ]; then
-            MESSAGE="✅ **Integration Test Passed**
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "✅ **Integration Test Passed**
 
-All consumer repositories (sample-cpp-repo, sample-java-repo, sample-binary-repo, sample-multi-lang-repo) passed their CI tests."
+All consumer repositories (sample-cpp-repo, sample-java-repo, sample-binary-repo, sample-multi-lang-repo) passed their CI tests." \
+              --repo ${{ github.repository }}
           else
-            MESSAGE="❌ **Integration Test Failed**
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "❌ **Integration Test Failed**
 
-Some consumer repositories failed. Check the workflow logs for details."
+Some consumer repositories failed. Check the workflow logs for details." \
+              --repo ${{ github.repository }}
           fi
-          
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "$MESSAGE" \
-            --repo ${{ github.repository }}
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
