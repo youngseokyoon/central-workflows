@@ -1,0 +1,45 @@
+name: Checkout Code
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: 'Repository to checkout (default: current repo)'
+        required: false
+        type: string
+        default: ''
+      ref:
+        description: 'Branch, tag, or commit to checkout'
+        required: false
+        type: string
+        default: ''
+      submodules:
+        description: 'Whether to checkout submodules (true/false/recursive)'
+        required: false
+        type: string
+        default: 'false'
+      fetch-depth:
+        description: 'Number of commits to fetch (0 for all history)'
+        required: false
+        type: number
+        default: 1
+
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          submodules: ${{ inputs.submodules }}
+          fetch-depth: ${{ inputs.fetch-depth }}
+      
+      - name: Display checkout info
+        run: |
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Working directory: $(pwd)"
+          echo "Contents:"
+          ls -la

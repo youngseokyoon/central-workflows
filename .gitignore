@@ -1,0 +1,10 @@
+build/
+target/
+*.class
+*.pyc
+__pycache__/
+.DS_Store
+node_modules/
+.idea/
+*.iml
+.vscode/

@@ -1,0 +1,103 @@
+name: Compile Java
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'Java version to use (8, 11, 17, 21, etc.)'
+        required: false
+        type: string
+        default: '17'
+      build-tool:
+        description: 'Build tool to use (maven, gradle)'
+        required: false
+        type: string
+        default: 'maven'
+      build-command:
+        description: 'Custom build command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      working-directory:
+        description: 'Working directory for build'
+        required: false
+        type: string
+        default: '.'
+      output-path:
+        description: 'Build output path (e.g., target/*.jar, build/libs/*.jar)'
+        required: false
+        type: string
+        default: ''
+      env-vars:
+        description: 'Environment variables as JSON string (e.g., {"MAVEN_OPTS":"-Xmx2048m"})'
+        required: false
+        type: string
+        default: '{}'
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: 'temurin'
+          cache: ${{ inputs.build-tool }}
+      
+      - name: Display Java version
+        run: |
+          java -version
+          echo "Build tool: ${{ inputs.build-tool }}"
+      
+      - name: Build with Maven
+        if: inputs.build-tool == 'maven' && inputs.build-command == ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          MAVEN_OPTS: ${{ fromJson(inputs.env-vars).MAVEN_OPTS || '' }}
+        run: |
+          echo "MAVEN_OPTS=$MAVEN_OPTS"
+          mvn clean package -DskipTests
+      
+      - name: Build with Gradle
+        if: inputs.build-tool == 'gradle' && inputs.build-command == ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          GRADLE_OPTS: ${{ fromJson(inputs.env-vars).GRADLE_OPTS || '' }}
+        run: |
+          echo "GRADLE_OPTS=$GRADLE_OPTS"
+          ./gradlew build -x test
+      
+      - name: Build with custom command
+        if: inputs.build-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.build-command }}
+      
+      - name: Display build output
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "Build completed successfully!"
+          echo "Java version: ${{ inputs.java-version }}"
+          echo "Build tool: ${{ inputs.build-tool }}"
+          if [ "${{ inputs.build-tool }}" = "maven" ]; then
+            echo "Maven artifacts:"
+            find target -name "*.jar" -o -name "*.war" 2>/dev/null || echo "No artifacts found"
+          elif [ "${{ inputs.build-tool }}" = "gradle" ]; then
+            echo "Gradle artifacts:"
+            find build/libs -name "*.jar" -o -name "*.war" 2>/dev/null || echo "No artifacts found"
+          fi
+      
+      - name: Upload build artifacts (for workflow chaining)
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-build-output
+          path: |
+            ${{ inputs.working-directory }}/target/*.jar
+            ${{ inputs.working-directory }}/target/*.war
+            ${{ inputs.working-directory }}/build/libs/*.jar
+            ${{ inputs.working-directory }}/build/libs/*.war
+          retention-days: 1
+          if-no-files-found: warn

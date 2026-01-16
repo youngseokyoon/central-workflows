@@ -1,0 +1,82 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      test-command:
+        description: 'Command to run tests'
+        required: true
+        type: string
+      language:
+        description: 'Programming language (cpp, java, python, node)'
+        required: false
+        type: string
+        default: 'cpp'
+      coverage-enabled:
+        description: 'Enable code coverage reporting'
+        required: false
+        type: boolean
+        default: false
+      working-directory:
+        description: 'Working directory for tests'
+        required: false
+        type: string
+        default: '.'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup C++ test environment
+        if: inputs.language == 'cpp'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libgtest-dev
+      
+      - name: Setup Java test environment
+        if: inputs.language == 'java'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Python test environment
+        if: inputs.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Setup Node.js test environment
+        if: inputs.language == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run tests
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.test-command }}
+      
+      - name: Generate coverage report
+        if: inputs.coverage-enabled && inputs.language == 'cpp'
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          # Example for C++ with gcov/lcov
+          echo "Generating C++ coverage report..."
+          # lcov --capture --directory . --output-file coverage.info
+          # lcov --list coverage.info
+      
+      - name: Upload coverage to Codecov
+        if: inputs.coverage-enabled
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ inputs.working-directory }}/coverage.info
+          fail_ci_if_error: false
+      
+      - name: Test summary
+        run: |
+          echo "✅ Tests completed successfully!"
+          echo "Language: ${{ inputs.language }}"
+          echo "Coverage enabled: ${{ inputs.coverage-enabled }}"
