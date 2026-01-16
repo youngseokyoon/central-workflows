@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: 'warn'
+      dry-run:
+        description: 'Dry-run mode - skip actual upload (for testing)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   upload:
@@ -47,6 +52,7 @@ jobs:
           ls -lah ${{ inputs.artifact-path }} 2>/dev/null || echo "Path not found or empty"
       
       - name: Upload to GitHub Artifacts
+        if: ${{ !inputs.dry-run }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
@@ -54,8 +60,17 @@ jobs:
           retention-days: ${{ inputs.retention-days }}
           if-no-files-found: ${{ inputs.if-no-files-found }}
       
+      - name: Dry-run mode - Skip upload
+        if: ${{ inputs.dry-run }}
+        run: |
+          echo "🔍 DRY-RUN MODE: Skipping artifact upload"
+          echo "Would upload:"
+          echo "  Name: ${{ inputs.artifact-name }}"
+          echo "  Path: ${{ inputs.artifact-path }}"
+          echo "  Retention: ${{ inputs.retention-days }} days"
+      
       - name: Upload to GitHub Release
-        if: inputs.upload-to-release && (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/'))
+        if: ${{ !inputs.dry-run && inputs.upload-to-release && (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')) }}
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ inputs.artifact-path }}
