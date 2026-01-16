@@ -26,7 +26,7 @@ jobs:
             --repo youngseokyoon/${{ matrix.repo }} \
             --ref main
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}  # Personal Access Token 필요
+          GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
       - name: Wait for workflow to start
         run: sleep 10
@@ -43,7 +43,7 @@ jobs:
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           echo "Latest run ID: $RUN_ID"
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
       - name: Wait for workflow completion
         run: |
@@ -52,7 +52,7 @@ jobs:
             --repo youngseokyoon/${{ matrix.repo }} \
             --exit-status
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN }}
       
       - name: Check workflow result
         run: |
@@ -70,7 +70,7 @@ jobs:
           
           echo "✅ CI passed in ${{ matrix.repo }}"
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN }}
   
   integration-summary:
     if: always()  # 실패해도 항상 실행
