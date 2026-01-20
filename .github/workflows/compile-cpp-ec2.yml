@@ -1,0 +1,100 @@
+name: Compile C++ (EC2 Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      compiler:
+        description: 'C++ compiler to use (gcc, g++, clang, clang++)'
+        required: false
+        type: string
+        default: 'gcc'
+      build-type:
+        description: 'Build type (Debug, Release, RelWithDebInfo, MinSizeRel)'
+        required: false
+        type: string
+        default: 'Release'
+      cmake-args:
+        description: 'Additional CMake arguments'
+        required: false
+        type: string
+        default: ''
+      working-directory:
+        description: 'Working directory for build'
+        required: false
+        type: string
+        default: '.'
+      output-path:
+        description: 'Build output path relative to working directory'
+        required: false
+        type: string
+        default: 'build'
+      env-vars:
+        description: 'Environment variables as JSON string (e.g., {"CC":"gcc-11","CXX":"g++-11"})'
+        required: false
+        type: string
+        default: '{}'
+
+jobs:
+  compile:
+    runs-on: [self-hosted, aws-ec2]
+    steps:
+      - name: Cleanup workspace (Pre)
+        run: |
+          echo "Cleaning up workspace before build..."
+          rm -rf * || true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        # Assuming Ubuntu on EC2, otherwise this needs adjustment (e.g., yum/dnf)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ${{ inputs.compiler }} || echo "Assuming tools pre-installed"
+      
+      - name: Parse environment variables
+        id: parse-env
+        run: |
+          echo "Parsing environment variables..."
+          echo '${{ inputs.env-vars }}' > env_vars.json
+          cat env_vars.json
+      
+      - name: Configure CMake
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          CC: ${{ fromJson(inputs.env-vars).CC || inputs.compiler }}
+          CXX: ${{ fromJson(inputs.env-vars).CXX || inputs.compiler == 'gcc' && 'g++' || inputs.compiler == 'clang' && 'clang++' || inputs.compiler }}
+        run: |
+          echo "Compiler settings:"
+          echo "CC=$CC"
+          echo "CXX=$CXX"
+          cmake -B ${{ inputs.output-path }} \
+                -DCMAKE_BUILD_TYPE=${{ inputs.build-type }} \
+                -G Ninja \
+                ${{ inputs.cmake-args }}
+      
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          cmake --build ${{ inputs.output-path }} --config ${{ inputs.build-type }}
+      
+      - name: Display build output
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "Build completed successfully!"
+          echo "Build type: ${{ inputs.build-type }}"
+          echo "Output directory contents:"
+          find ${{ inputs.output-path }} -type f -executable -o -name "*.a" -o -name "*.so" -o -name "*.dylib"
+      
+      - name: Upload build artifacts (for workflow chaining)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-build-output-ec2
+          path: ${{ inputs.working-directory }}/${{ inputs.output-path }}
+          retention-days: 1
+          
+      - name: Cleanup workspace (Post)
+        if: always()
+        run: |
+          echo "Cleaning up workspace after build..."
+          rm -rf * || true

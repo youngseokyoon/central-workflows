@@ -1,0 +1,54 @@
+name: Upload Artifact (EC2 Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: false
+        type: string
+        description: "Name of the artifact to download"
+      create-release:
+        required: false
+        type: boolean
+        default: false
+        description: "Whether to create a GitHub Release"
+      release-tag:
+        required: false
+        type: string
+        description: "Tag name for the release"
+
+jobs:
+  upload:
+    runs-on: [self-hosted, aws-ec2]
+    steps:
+      - name: Cleanup workspace (Pre)
+        run: |
+          echo "Cleaning up workspace before upload..."
+          rm -rf * || true
+        
+      # Download specific artifact or all
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # If name is empty, it downloads all
+          name: ${{ inputs.artifact-name }}
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+
+      # Conditional Release Upload
+      - name: Upload to Release
+        if: inputs.create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.release-tag }}
+          files: ./artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Cleanup workspace (Post)
+        if: always()
+        run: |
+          echo "Cleaning up workspace after upload..."
+          rm -rf * || true
