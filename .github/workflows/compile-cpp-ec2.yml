@@ -33,10 +33,15 @@ on:
         required: false
         type: string
         default: '{}'
+      runs-on:
+        description: 'Runner label(s) as JSON string'
+        required: false
+        type: string
+        default: '["self-hosted", "aws-ec2"]'
 
 jobs:
   compile:
-    runs-on: [self-hosted, aws-ec2]
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     steps:
       - name: Cleanup workspace (Pre)
         run: |

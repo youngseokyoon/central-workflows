@@ -13,10 +13,15 @@ on:
         type: boolean
         default: true
         description: "Whether to upload the compiled artifact"
+      runs-on:
+        description: 'Runner label(s) as JSON string'
+        required: false
+        type: string
+        default: '["self-hosted", "aws-ec2"]'
 
 jobs:
   build:
-    runs-on: [self-hosted, aws-ec2]
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     steps:
       - name: Cleanup workspace (Pre)
         run: |
