@@ -16,15 +16,16 @@ on:
         required: false
         type: string
         description: "Tag name for the release"
-      runs-on:
-        description: 'Runner label(s) as JSON string'
+      runner-target:
+        description: "Execution environment: 'ec2' (Self-hosted) or 'ubuntu' (GitHub-hosted)"
         required: false
         type: string
-        default: '["self-hosted", "aws-ec2"]'
+        default: 'ec2'
 
 jobs:
   upload:
-    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    # Safe mapping: 'ubuntu' -> 'ubuntu-latest', everything else -> EC2 Self-hosted
+    runs-on: ${{ inputs.runner-target == 'ubuntu' && 'ubuntu-latest' || fromJson('["self-hosted", "aws-ec2"]') }}
     steps:
       - name: Cleanup workspace (Pre)
         run: |
