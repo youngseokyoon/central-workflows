@@ -1,0 +1,15 @@
+graph TD
+    Central[Central Workflows Repo]
+    Java[Sample Java Repo]
+    Cpp[Sample Cpp Repo]
+    Binary[Sample Binary Repo]
+    Multi[Sample Multi-Lang Repo]
+
+    Central -->|Orchestrates| Java
+    Central -->|Orchestrates| Cpp
+    Central -->|Orchestrates| Binary
+    Central -->|Orchestrates| Multi
+
+    Java -.->|Uses| Central
+    Cpp -.->|Uses| Central
+    Binary -.->|Uses| Central

@@ -1,0 +1,56 @@
+name: Reusable Java Build (EC2 Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        required: true
+        type: string
+        default: '17'
+        description: "Java version to use"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Whether to upload the compiled artifact"
+      runs-on:
+        description: 'Runner label(s) as JSON string'
+        required: false
+        type: string
+        default: '["self-hosted", "aws-ec2"]'
+
+jobs:
+  build:
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    steps:
+      - name: Cleanup workspace (Pre)
+        run: |
+          echo "Cleaning up workspace before build..."
+          rm -rf * || true
+
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: 'temurin'
+          # Cache might need adjustment on self-hosted due to shared storage implications, but usually fine
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+
+      - name: Upload Artifact
+        if: ${{ inputs.upload-artifact }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-app-${{ inputs.java-version }}-ec2
+          path: target/*.jar
+          retention-days: 5
+          
+      - name: Cleanup workspace (Post)
+        if: always()
+        run: |
+          echo "Cleaning up workspace after build..."
+          rm -rf * || true

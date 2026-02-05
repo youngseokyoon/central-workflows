@@ -1,0 +1,10 @@
+sequenceDiagram
+    participant Dev as Developer
+    participant Consumer as Consumer Repo (CI)
+    participant Central as Central Repo (Reusable)
+
+    Dev->>Consumer: Push Code / Create PR
+    Consumer->>Consumer: Trigger .github/workflows/ci.yml
+    Consumer->>Central: Call Reusable Workflow (uses: central/.../compile-java.yml)
+    Central-->>Consumer: Execute Build & Test Logic
+    Consumer->>Dev: Report Status (Pass/Fail)

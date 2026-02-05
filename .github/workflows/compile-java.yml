@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: '{}'
+      upload-artifact:
+        description: 'Upload build artifacts (set to false for matrix builds to avoid conflicts)'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   compile:
@@ -91,6 +96,7 @@ jobs:
           fi
       
       - name: Upload build artifacts (for workflow chaining)
+        if: ${{ inputs.upload-artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: java-build-output

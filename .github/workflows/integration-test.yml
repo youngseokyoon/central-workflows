@@ -1,0 +1,161 @@
+name: Integration Test
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  trigger-consumer-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - sample-cpp-repo
+          - sample-java-repo
+          - sample-binary-repo
+          - sample-multi-lang-repo
+    steps:
+      - name: Trigger and Monitor CI in ${{ matrix.repo }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.CI_TOKEN }}
+          script: |
+            const repo = '${{ matrix.repo }}';
+            const owner = 'youngseokyoon';
+            const workflow_id = 'ci.yml';
+            const ref = 'main';
+
+            console.log(`🚀 Triggering CI for ${owner}/${repo} on ref ${ref}`);
+
+            // 1. Trigger the workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id,
+              ref,
+            });
+
+            console.log('⏳ Waiting for workflow run to appear...');
+            
+            // 2. Wait for the new run to appear
+            // Use a short delay loop to find the run created just now
+            let run_id = null;
+            // Retry for up to 60 seconds
+            for (let i = 0; i < 12; i++) {
+                await new Promise(r => setTimeout(r, 5000));
+                
+                const runs = await github.rest.actions.listWorkflowRuns({
+                    owner,
+                    repo,
+                    workflow_id,
+                    per_page: 1,
+                    // Optionally filter by event=workflow_dispatch if needed, 
+                    // but 'latest' is usually fine for this context
+                });
+
+                if (runs.data.workflow_runs.length > 0) {
+                    // Check if the run is very recent (optional, but good safety)
+                    run_id = runs.data.workflow_runs[0].id;
+                    console.log(`Found latest Run ID: ${run_id}`);
+                    break;
+                }
+            }
+            
+            if (!run_id) {
+                core.setFailed("❌ Could not find the triggered workflow run.");
+                return;
+            }
+
+            // 3. Poll for completion
+            console.log(`👀 Watching run ${run_id}...`);
+            
+            while (true) {
+                const run = await github.rest.actions.getWorkflowRun({
+                    owner,
+                    repo,
+                    run_id,
+                });
+
+                const status = run.data.status;
+                const conclusion = run.data.conclusion;
+
+                console.log(`Current status: ${status}`);
+
+                if (status === 'completed') {
+                    console.log(`Workflow completed with conclusion: ${conclusion}`);
+                    if (conclusion === 'success') {
+                        console.log('✅ CI Success!');
+                        return; // Success
+                    } else {
+                        core.setFailed(`❌ CI Failed with conclusion: ${conclusion}`);
+                        return;
+                    }
+                }
+
+                // Wait 15 seconds before next poll
+                await new Promise(r => setTimeout(r, 15000));
+            }
+
+  integration-summary:
+    if: always()
+    needs: trigger-consumer-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect results
+        id: results
+        run: |
+          echo "📊 Collecting integration test results..."
+          
+          # Check matrix results
+          RESULT="${{ needs.trigger-consumer-tests.result }}"
+          
+          if [ "$RESULT" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Post result to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.CI_TOKEN }}
+          script: |
+            const status = '${{ steps.results.outputs.status }}';
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            let body = '';
+            if (status === 'success') {
+                body = `✅ **Integration Test Passed**\n\nAll consumer repositories (sample-cpp-repo, sample-java-repo, sample-binary-repo, sample-multi-lang-repo) passed their CI tests.`;
+            } else {
+                body = `❌ **Integration Test Failed**\n\nSome consumer repositories failed. Check the workflow logs for details.`;
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body,
+            });
+      
+      - name: Check final status
+        run: |
+          echo "📊 Integration Test Results Summary"
+          echo "===================================="
+          
+          if [ "${{ steps.results.outputs.status }}" = "success" ]; then
+            echo "🎉 All consumer repositories passed CI tests!"
+            echo "✅ Safe to merge this PR"
+          else
+            echo "❌ Some tests failed - review the matrix results above"
+            echo "⚠️  Please fix issues before merging"
+            exit 1
+          fi

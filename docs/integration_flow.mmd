@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant Admin as Central Admin/Schedule
+    participant Orchard as Integration Test (Central)
+    participant Consumer as Consumer Repo (CI)
+
+    Admin->>Orchard: Trigger integration-test.yml
+    
+    par For Each Repo (Matrix)
+        Orchard->>Consumer: API Trigger (workflow_dispatch)
+        
+        loop Polling Status
+            Orchard->>Consumer: Check Run Status
+            Consumer-->>Orchard: "in_progress"
+        end
+        
+        Consumer-->>Orchard: "completed" (success/fail)
+    end
+    
+    Orchard->>Orchard: Aggregate Results
+    Orchard->>Admin: Report Summary (PR Comment / Log)

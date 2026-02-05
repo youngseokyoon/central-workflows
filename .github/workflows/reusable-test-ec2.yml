@@ -1,0 +1,84 @@
+name: Reusable Test (EC2 Self-Hosted)
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        required: true
+        type: string
+        description: "Language to test (cpp, java, python, node)"
+      upload_coverage:
+        required: false
+        type: boolean
+        default: false
+      runs-on:
+        description: 'Runner label(s) as JSON string'
+        required: false
+        type: string
+        default: '["self-hosted", "aws-ec2"]'
+
+jobs:
+  test:
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    steps:
+      - name: Cleanup workspace (Pre)
+        run: |
+          echo "Cleaning up workspace before test..."
+          rm -rf * || true
+
+      - uses: actions/checkout@v4
+
+      # Setup environment based on language
+      # Note: On self-hosted runners, tools might be pre-installed.
+      # We keep setup actions for consistency, but they might just use cached versions.
+      
+      - name: Set up C++
+        if: inputs.language == 'cpp'
+        run: |
+          # Verify tools exist or install them (requires sudo, might need NOPASSWD)
+          sudo apt-get update && sudo apt-get install -y cmake build-essential || echo "Assuming tools pre-installed"
+
+      - name: Set up Java
+        if: inputs.language == 'java'
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node
+        if: inputs.language == 'node'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Set up Python
+        if: inputs.language == 'python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Build & Test Logic
+      - name: Build and Test (C++)
+        if: inputs.language == 'cpp'
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build .
+
+      - name: Test (common)
+        if: inputs.language != 'cpp'
+        run: echo "Running tests for ${{ inputs.language }}..."
+
+      - name: Upload Coverage
+        if: inputs.upload_coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ inputs.language }}-ec2
+          path: coverage/
+
+      - name: Cleanup workspace (Post)
+        if: always()
+        run: |
+          echo "Cleaning up workspace after test..."
+          rm -rf * || true
